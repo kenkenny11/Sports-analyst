@@ -3,6 +3,7 @@ name: AI Sports Publisher
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
 
 jobs:
   generate-and-publish:
@@ -22,7 +23,7 @@ jobs:
       - name: Run AI Writer
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_TITLE: ${{ github.event.issue.title || 'Arsenal vs Chelsea' }}
         run: |
           cat << 'EOF' > write.py
           import os
@@ -42,13 +43,12 @@ jobs:
           )
           body = response.choices[0].message.content
           
-          # Create a clean URL-friendly filename
           slug = re.sub(r'[^a-z0-9]+', '-', topic.lower()).strip('-')
           today = datetime.now().strftime("%Y-%m-%d")
           filename = f"src/content/blog/{today}-{slug}.md"
           
           with open(filename, "w") as f:
-              f.write(f"---\ntitle: '{topic}'\ndescription: 'AI Analysis for {topic}'\npubDate: {today}\ndraft: false\n---\n\n{body}")
+              f.write(f"---\ntitle: '{topic}'\ndescription: 'AI Analysis'\npubDate: {today}\ndraft: false\n---\n\n{body}")
           EOF
           python write.py
 
@@ -57,5 +57,5 @@ jobs:
           git config --global user.name "AI Bot"
           git config --global user.email "bot@example.com"
           git add src/content/blog/*
-          git commit -m "AI Article: ${{ github.event.issue.title }}"
+          git commit -m "AI Article: ${{ github.event.issue.title || 'Arsenal vs Chelsea' }}"
           git push
