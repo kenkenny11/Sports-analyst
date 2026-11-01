@@ -1,0 +1,61 @@
+name: AI Sports Publisher
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Groq
+        run: pip install groq
+
+      - name: Run AI Writer
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title || 'Arsenal vs Chelsea' }}
+        run: |
+          cat << 'EOF' > write.py
+          import os
+          from groq import Groq
+          from datetime import datetime
+          import re
+
+          client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+          topic = os.environ.get("ISSUE_TITLE")
+          
+          prompt = f"Write an original 800-word sports analysis article about {topic}. Sections: Form, Tactical Preview, Forecast. NEVER use the words bet, odds, or wager. End with: '> This article is for informational purposes only.'"
+          
+          response = client.chat.completions.create(
+              messages=[{"role": "user", "content": prompt}],
+              model="llama-3.3-70b-versatile",
+              temperature=0.6
+          )
+          body = response.choices[0].message.content
+          
+          slug = re.sub(r'[^a-z0-9]+', '-', topic.lower()).strip('-')
+          today = datetime.now().strftime("%Y-%m-%d")
+          filename = f"src/content/blog/{today}-{slug}.md"
+          
+          with open(filename, "w") as f:
+              f.write(f"---\ntitle: '{topic}'\ndescription: 'AI Analysis'\npubDate: {today}\ndraft: false\n---\n\n{body}")
+          EOF
+          python write.py
+
+      - name: Push to Website
+        run: |
+          git config --global user.name "AI Bot"
+          git config --global user.email "bot@example.com"
+          git add src/content/blog/*
+          git commit -m "AI Article: ${{ github.event.issue.title || 'Arsenal vs Chelsea' }}"
+          git push
